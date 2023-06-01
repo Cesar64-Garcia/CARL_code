@@ -54,7 +54,6 @@ def create_video(query_embs, query_frames, key_embs, key_frames, video_path, use
 
     plt.figure(figsize=(5,1))
     nns_stride = np.floor(nns/time_stride)
-    print(nns_stride)
     for t, t_nns in enumerate(nns_stride):
         plt.plot([t, t_nns], [1, 0], 'k--')
         plt.show()
@@ -109,8 +108,6 @@ def create_multiple_video(query_embs, query_frames, key_embs_list, key_frames_li
 
     def update(i):
         """Update plot with next frame."""
-        if i % 10 == 0:
-            logger.info(f'{i}/{len(query_frames)}')
         ax[0, 0].imshow(unnorm(query_frames[i]))
         ax[0, 0].grid(False)
         ax[0, 0].set_xticks([])
@@ -137,8 +134,6 @@ def create_single_video(frames, labels, video_path, interval=50, time_stride=1, 
     if time_stride>1:
         frames = frames[::time_stride]
         interval = interval*time_stride
-
-    print(labels[::time_stride])
 
     def update(i):
         """Update plot with next frame."""
@@ -182,13 +177,11 @@ def visualize(args, cfg):
         name = data["name"]
         video_file = os.path.join(args.data_path, "pouring", data["video_file"])
         if name == args.reference_video:
-            print(name)
             video, _, info = read_video(video_file, pts_unit='sec')
             video = video.permute(0,3,1,2).float() / 255.0
             query_frames = video.numpy()
             query_embs = np.arange(len(query_frames)).reshape(-1,1)
         elif name == args.candidate_video:
-            print(name)
             video, _, info = read_video(video_file, pts_unit='sec')
             video = video.permute(0,3,1,2).float() / 255.0
             key_frames = video.numpy()

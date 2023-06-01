@@ -30,3 +30,4 @@ tensorflow-gpu==2.3.0
 timm==0.3.2
 yacs==0.1.8
 youtube-dl==2021.6.6
+protobuf==3.20.*

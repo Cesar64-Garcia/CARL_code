@@ -72,7 +72,6 @@ def train(cfg, train_loader, model, optimizer, scheduler, algo, cur_epoch, summa
             total_loss[key] += du.all_reduce([loss_dict[key]])[0].item() / data_size
 
         if cfg.NUM_GPUS == 1 and cur_iter % cfg.LOGGING.REPORT_INTERVAL == 0:
-            print(names)
             logger.info(f"iter {data_size * cur_epoch + cur_iter}, training loss: {loss.item():.3f}")
             visual_video = videos[0]
             if cfg.SSL:
@@ -115,7 +114,6 @@ def val(cfg, val_loader, model, algo, cur_epoch, summary_writer):
                 total_loss[key] += du.all_reduce([loss_dict[key]])[0].item() / data_size
 
         if cfg.NUM_GPUS == 1:
-            print(names)
             visual_video = videos[0]
             if cfg.SSL:
                 for i, v in enumerate(visual_video):

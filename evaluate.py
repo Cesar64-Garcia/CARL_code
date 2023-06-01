@@ -77,19 +77,16 @@ def get_embeddings_dataset(cfg, model, data_loader):
     return dataset
 
 def evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_emb_loader, 
-                    iterator_tasks, embedding_tasks, cur_epoch, summary_writer):
+                    iterator_tasks, embedding_tasks, cur_epoch, summary_writer, record_id):
     """Evaluate learnt embeddings on downstream tasks."""
 
     metrics = {}
-    if iterator_tasks:
-        for task_name, task in iterator_tasks.items():
-            metrics[task_name] = task.evaluate(model, train_loader, val_loader, cur_epoch, summary_writer)
-
+    
     if embedding_tasks:
         for i, dataset_name in enumerate(cfg.DATASETS):
             dataset = {'name': dataset_name}
-            logger.info(f"generating train embeddings for {dataset_name} dataset at {cur_epoch}.")
-            dataset['train_dataset'] = get_embeddings_dataset(cfg, model, train_emb_loader[i])
+            # logger.info(f"generating train embeddings for {dataset_name} dataset at {cur_epoch}.")
+            # dataset['train_dataset'] = get_embeddings_dataset(cfg, model, train_emb_loader[i])
             logger.info(f"generating val embeddings for {dataset_name} dataset at {cur_epoch}.")
             dataset['val_dataset'] = get_embeddings_dataset(cfg, model, val_emb_loader[i])
 
@@ -97,37 +94,38 @@ def evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_em
                 if task_name not in metrics:
                     metrics[task_name] = {}
                 metrics[task_name][dataset_name] = task.evaluate(dataset, cur_epoch, summary_writer)
+            
+            # if dataset_name == "pouring" or dataset_name == "baseball_pitch":
+            print("generating visualization for video alignment", len(dataset['val_dataset']['embs']))
+            
+            time_stride=10
+            K = 5
+            q_id = 0
+            k_ids = [1]
+            query_data = dataset['val_dataset']['embs'][q_id]
+            key_data_list = [dataset['val_dataset']['embs'][k_id] for k_id in k_ids]
 
-            if dataset_name == "pouring" or dataset_name == "baseball_pitch":
-                print("generating visualization for video alignment")
-                time_stride=10
-                K = 5
-                q_id = 0
-                k_ids = [1, 2, 3, 4, 5]
-                query_data = dataset['val_dataset']['embs'][q_id]
-                key_data_list = [dataset['val_dataset']['embs'][k_id] for k_id in k_ids]
-
-                key_frames_list = [0 for _ in range(K)]
-                for data_id, data in enumerate(val_emb_loader[i].dataset.dataset):
-                    if data['name'] == dataset['val_dataset']['names'][q_id]:
-                        query_video = val_emb_loader[i].dataset[data_id][0].permute(0,2,3,1)
-                    else:
-                        for k, k_id in enumerate(k_ids):
-                            if data['name'] == dataset['val_dataset']['names'][k_id]:
-                                key_frames_list[k] = val_emb_loader[i].dataset[data_id][0].permute(0,2,3,1)
-                '''
-                create_multiple_video(np.arange(len(query_video)).reshape(-1,1), query_video, 
-                        [np.arange(len(key_video)).reshape(-1,1) for key_video in key_frames_list], key_frames_list, 
-                        os.path.join(cfg.LOGDIR, f'origin_multi_{cur_epoch}.mp4'), use_dtw=True, interval=50)
-                create_multiple_video(query_data, query_video, key_data_list, key_frames_list, 
-                        os.path.join(cfg.LOGDIR, f'alignment_multi_{cur_epoch}.mp4'), use_dtw=True, interval=50)
-                '''
-                key_video, key_data = key_frames_list[0], key_data_list[0]
-                create_video(np.arange(len(query_video)).reshape(-1,1), query_video, np.arange(len(key_video)).reshape(-1,1), key_video, 
-                        os.path.join(cfg.LOGDIR, f'origin_{cur_epoch}.mp4'), use_dtw=False, interval=50, time_stride=time_stride, image_out=True)
-                create_video(query_data, query_video, key_data, key_video, 
-                        os.path.join(cfg.LOGDIR, f'alignment_{cur_epoch}.mp4'), use_dtw=True, interval=50, time_stride=time_stride, image_out=True)
-                
+            key_frames_list = [0 for _ in range(K)]
+            for data_id, data in enumerate(val_emb_loader[i].dataset.dataset):
+                if data['name'] == dataset['val_dataset']['names'][q_id]:
+                    query_video = val_emb_loader[i].dataset[data_id][0].permute(0,2,3,1)
+                else:
+                    for k, k_id in enumerate(k_ids):
+                        if data['name'] == dataset['val_dataset']['names'][k_id]:
+                            key_frames_list[k] = val_emb_loader[i].dataset[data_id][0].permute(0,2,3,1)
+            '''
+            create_multiple_video(np.arange(len(query_video)).reshape(-1,1), query_video, 
+                    [np.arange(len(key_video)).reshape(-1,1) for key_video in key_frames_list], key_frames_list, 
+                    os.path.join(cfg.LOGDIR, f'origin_multi_{cur_epoch}.mp4'), use_dtw=True, interval=50)
+            create_multiple_video(query_data, query_video, key_data_list, key_frames_list, 
+                    os.path.join(cfg.LOGDIR, f'alignment_multi_{cur_epoch}.mp4'), use_dtw=True, interval=50)
+            '''
+            key_video, key_data = key_frames_list[0], key_data_list[0]
+            # create_video(np.arange(len(query_video)).reshape(-1,1), query_video, np.arange(len(key_video)).reshape(-1,1), key_video, 
+            #         os.path.join(cfg.LOGDIR, f'origin_{cur_epoch}.mp4'), use_dtw=False, interval=50, time_stride=time_stride, image_out=False)
+            create_video(query_data, query_video, key_data, key_video, 
+                    os.path.join(cfg.LOGDIR, f'alignment_{record_id}.mp4'), use_dtw=True, interval=50, time_stride=time_stride, image_out=False)
+            
             del dataset
 
     # Add all metrics in a separate tag so that analysis is easier.
@@ -174,12 +172,14 @@ def evaluate():
     start_epoch = load_checkpoint(cfg, model, optimizer)
 
     # Setup Dataset Iterators from train and val datasets.
-    train_loader, train_emb_loader = construct_dataloader(cfg, "train")
-    val_loader, val_emb_loader = construct_dataloader(cfg, "val")
-    iterator_tasks, embedding_tasks = get_tasks(cfg)
+    # train_loader, train_emb_loader = construct_dataloader(cfg, "train", "auto", "train.pkl")
+    
+    for i in range(99):
+        val_loader, val_emb_loader = construct_dataloader(cfg, "val", "auto", "val_" + str(i))
+        iterator_tasks, embedding_tasks = get_tasks(cfg)
 
-    evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_emb_loader, 
-                        iterator_tasks, embedding_tasks, start_epoch, summary_writer)
+        evaluate_once(cfg, model, None, val_loader, None, val_emb_loader, 
+                            iterator_tasks, embedding_tasks, start_epoch, summary_writer, i)
 
 if __name__ == '__main__':
     evaluate()

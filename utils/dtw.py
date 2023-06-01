@@ -68,8 +68,3 @@ if __name__ == "__main__":
     manhattan_distance = lambda x, y: np.abs(x - y)
 
     d, cost_matrix, acc_cost_matrix, path = dtw(x, y, dist=manhattan_distance)
-
-    print(d)
-    print(cost_matrix)
-    print(acc_cost_matrix)
-    print(path)

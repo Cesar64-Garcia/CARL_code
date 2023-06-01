@@ -155,7 +155,6 @@ def create_tfrecords(name, output_dir, dir, label_dir,
 
 
         if len(seq['video'])!=len(seq['labels']):
-            print(vid_name, len(seq['video']), len(seq['labels']))
             if len(seq['video']) > len(seq['labels']):
                 seq['video'] = [seq['video'][math.floor(j*len(seq['video'])/len(seq['labels']))] for j in range(len(seq['labels']))]
             else:

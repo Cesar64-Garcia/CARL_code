@@ -30,7 +30,7 @@ PENN_ACTION_LIST = [
 ]
 
 class PennAction(torch.utils.data.Dataset):
-    def __init__(self, cfg, split, dataset_name=None, mode="auto", sample_all=False, fileName=""):
+    def __init__(self, cfg, split, dataset_name=None, mode="auto", sample_all=False):
         assert split in ["train", "val", "test"]
         self.cfg = cfg
         self.split = split
@@ -41,10 +41,29 @@ class PennAction(torch.utils.data.Dataset):
         self.sample_all = sample_all
         self.num_contexts = cfg.DATA.NUM_CONTEXTS
 
-        with open(os.path.join(cfg.PATH_TO_DATASET, fileName+'.pkl'), 'rb') as f:
-            self.dataset, self.action_to_indices = pickle.load(f)
+        if self.split == "val":
+            with open(os.path.join(cfg.PATH_TO_DATASET, split+'.pkl'), 'rb') as f:
+                self.dataset, self.action_to_indices = pickle.load(f)
             
-        logger.info(f"{len(self.dataset)} {self.split} samples of {dataset_name} dataset have been read.")
+            seq_lens = [data['seq_len'] for data in self.dataset]
+            hist, bins = np.histogram(seq_lens, bins='auto')
+            print(list(bins.astype(np.int)))
+            print(list(hist))
+        else:
+            with open(os.path.join(cfg.PATH_TO_DATASET, split+'.pkl'), 'rb') as f:
+                self.dataset, self.action_to_indices = pickle.load(f)
+
+            if dataset_name is not None:
+                indices = self.action_to_indices[PENN_ACTION_LIST.index(dataset_name)]
+                self.dataset = [self.dataset[index] for index in indices]
+                logger.info(f"{len(self.dataset)} {self.split} samples of {dataset_name} dataset have been read.")
+            else:
+                logger.info(f"{len(self.dataset)} {self.split} samples of Penn Action dataset have been read.")
+            if not self.sample_all:
+                seq_lens = [data['seq_len'] for data in self.dataset]
+                hist, bins = np.histogram(seq_lens, bins='auto')
+                print(list(bins.astype(np.int)))
+                print(list(hist))
 
         self.num_frames = cfg.TRAIN.NUM_FRAMES
         # Perform data-augmentation
