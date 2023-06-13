@@ -145,7 +145,25 @@ tensorboard --logdir=~/tmp/scl_transformer_logs
 
 The video file of video alignment have already generated at `/home/username/tmp/scl_transformer_logs`
 
+## Fit3D evaluation
 
+Data Preparation:
+
+```
+python dataset_preparation/mislab_fit3_process.py
+```
+
+Evaluation: 
+
+```
+python -m torch.distributed.launch --nproc_per_node 1 evaluate.py --workdir ~/datasets --cfg_file ./configs/scl_transformer_mislab_config.yml --logdir ~/tmp/scl_transformer_mislab_logs
+```
+
+Evaluation:
+
+```
+python carl_evaluate.py
+```
 
 ## Citation
 
