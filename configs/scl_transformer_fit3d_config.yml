@@ -41,7 +41,7 @@ EVAL:
     - kendalls_tau
   VAL_INTERVAL: 50
 IMAGE_SIZE: 224
-LOGDIR: /tmp/scl_transformer_mislab_logs
+LOGDIR: /tmp/scl_transformer_fit3d_logs
 LOGGING:
   REPORT_INTERVAL: 20
 MODEL:
@@ -87,7 +87,7 @@ OPTIMIZER:
     FINAL_LR: 0.0
   TYPE: AdamOptimizer
   WEIGHT_DECAY: 1.0e-05
-PATH_TO_DATASET: "mislab_boxing"
+PATH_TO_DATASET: "fit3d"
 RNG_SEED: 1
 SHARD_ID: 0
 SCL:

@@ -13,72 +13,87 @@ import torch
 from datetime import datetime
 import subprocess
 import json
-
+from itertools import groupby
+from operator import itemgetter
+import random
 
 def main():
-    data_root = "/media/mislab_dataset"
+    data_root = "/media/mislab_dataset/fit3D"
     output_dir = os.path.join(data_root, "processed_videos")
     os.makedirs(output_dir, exist_ok=True)
-    # if split == "train":
-    #     save_file = os.path.join(data_root, f"{classes}_train_{version}.pkl")
-    # else:
 
-    annotation_file = os.path.join(data_root, "annotation_info.json")
+    annotation_file = os.path.join(data_root, "annotation_info_fit.json")
 
     with open(annotation_file, 'r') as f:
         data = json.load(f)
-
-    with open(annotation_file, 'w') as f:
-        json.dump(data, f, indent=2)
-
-    # with open(train_file, 'r') as f:
-    #     train_lines = f.readlines()
-
-    # with open(val_file, 'r') as f:
-    #     val_lines = f.readlines()
-
-    # if split == "train":
-    #     lines = train_lines
-    # else:
-    #     lines = val_lines
-
-    # labels = {}
-    # video_ids = set()
-    # event_ids = set()
-    # for line in lines:
-    #     full_id = line.split(" ")[0]
-    #     label = int(line.split(" ")[1])
-    #     labels[full_id] = label
-    #     video_id = full_id.split("_E_")[0]
-    #     video_ids.add(video_id)
-    #     event_id = full_id.split("_A_")[0]
-    #     event_ids.add(event_id)
-
+        
     for file in data["files"]:
         file_path = file["path"]
-        output_file = os.path.join(output_dir, file_path)
         video_id = file["id"]
+        action = file["action"]
+        output_file = os.path.join(output_dir, video_id + ".mp4")
         if not os.path.exists(output_file):
             video_path = os.path.join(data_root, file_path)
+            
+            video = cv2.VideoCapture(video_path)
+            total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+            start = 0
+            end = total_frames
+            
+            if (action not in data["reps"]):
+                file['skip'] = True
+            else:
+                file['skip'] = False
+                reps_break = data["reps"][action]
+                start, end = get_cropping_setting(total_frames, reps_break[0], reps_break[-2])
+            
+                print(data["reps"][action])
+                print(start, end)
 
-            temp_output_file = os.path.join(output_dir, video_id) + "_temp.mp4"
+            temp_output_file = os.path.join(output_dir, video_id + "_temp.mp4")
             cmd = f'ffmpeg -hide_banner -loglevel panic -y -i {video_path} -c:v copy -c:a copy {output_file}'
             os.system(cmd)
             cmd = f'ffmpeg -hide_banner -loglevel panic -y -i {output_file} -strict -2 -vf scale=224:224 {temp_output_file}'
             os.system(cmd)
-            cmd = f'ffmpeg -hide_banner -loglevel panic -y -i {temp_output_file} -filter:v fps=60 {output_file}'
+            cmd = f'ffmpeg -hide_banner -loglevel panic -y -i {temp_output_file} -strict -2 -ss {start/50} -t {(end - start)/50} {output_file}'
             os.system(cmd)
+            cmd = f'ffmpeg -hide_banner -loglevel panic -y -i {output_file} -filter:v fps=50 {temp_output_file}'
+            os.system(cmd)
+            cmd = f'ffmpeg -hide_banner -loglevel panic -y -i {temp_output_file} -c:v copy -c:a copy {output_file}'
             os.remove(temp_output_file)
-
+            file["out_path"] = output_file
+            file["start"] = start
+            file["end"] = end
+            
+    sorted_array = sorted(data["files"], key=itemgetter("action"))
+    grouped_data = groupby(sorted_array, key=itemgetter("action"))
+    groups = [list(group) for key, group in grouped_data]
+    pairs = []
+    
+    with open(annotation_file, 'w') as f:
+        json.dump(data, f, indent=2)
+    
+    for group in groups:
+        id = group[0]["action"]
+        files = list(map(lambda x: x["out_path"], group))
+        
+        pairs.append({
+            "id": id,
+            "files": files,
+            "skip": file['skip']
+        })
+    
+    data['pairs'] = pairs
+        
     i = 0
     for action_pair in data['pairs']:
-        action_pair['index'] = i
+        if (action_pair['skip']):
+            continue
         action_pair['frames'] = []
         action_pair["same_amount_frames"] = True
 
         for file in action_pair['files']:
-            url = os.path.join(output_dir, file)
-            video_info = get_video_info(url)
+            video_info = get_video_info(file)
             file_info = {}
             file_info['file'] = file
             file_info['num_frames'] = video_info['num_frames']
@@ -94,7 +109,8 @@ def main():
                 break
         
         
-        save_file = os.path.join(data_root, "val_" + str(i) + ".pkl")
+        save_file = os.path.join(data_root, "data/val_" + str(i) + ".pkl")
+        action_pair['index']= i
         action_to_indices = [[] for _ in data['pairs']]
         dataset = []
         action_id = action_pair['id']
@@ -110,10 +126,10 @@ def main():
         num_frames2 = int(video2.get(cv2.CAP_PROP_FRAME_COUNT))
 
         frame_label1 = -1 * torch.ones(num_frames1)
-        frame_label1[0:num_frames1] = action_id
+        frame_label1[0:num_frames1] = i
 
         frame_label2 = -1 * torch.ones(num_frames2)
-        frame_label2[0:num_frames2] = action_id
+        frame_label2[0:num_frames2] = i
 
         data1_dict = {"id": i*2, "name": file1_path, "video_file": output1_file,
                       "frame_label": frame_label1, "seq_len": num_frames1, "action_label": action_id}
@@ -133,6 +149,8 @@ def main():
             pickle.dump(results, f)
         print(f"{len(dataset)} samples of MISLab dataset have been writen.")
 
+    with open(annotation_file, 'w') as f:
+        json.dump(data, f, indent=2)
 
 def get_video_info(file_path):
     # Open the video file using OpenCV
@@ -167,6 +185,18 @@ def get_video_info(file_path):
     video_info["start_time_ms"] = creation_time
     return video_info
 
+def get_cropping_setting(num_frames, first_rep_frame_end, last_frame_start):
+    start_end = first_rep_frame_end - 30 if first_rep_frame_end > 50 else first_rep_frame_end
+    end_start = last_frame_start + 30 if last_frame_start - last_frame_start > 50 else last_frame_start
+    
+    start = (generate_random_number(0, start_end))
+    end = (generate_random_number(end_start, num_frames))
+    return start, end
+    
+def generate_random_number(start, end):
+    return random.randint(start, end)
+    
+    
 
 if __name__ == '__main__':
     main()

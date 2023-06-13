@@ -31,7 +31,6 @@ def unnorm(query_frame):
     query_frame = (query_frame - min_v) / (max_v - min_v)
     return query_frame
 
-
 def align(query_feats, candidate_feats, use_dtw):
     """Align videos based on nearest neighbor or dynamic time warping."""
     if use_dtw:
@@ -43,10 +42,29 @@ def align(query_feats, candidate_feats, use_dtw):
         nns = np.argmin(dists, axis=1)
     return nns
 
+def align_path(query_feats, candidate_feats):
+    """Align videos based on nearest neighbor or dynamic time warping."""
+    _, _, _, path = dtw(query_feats, candidate_feats, dist='sqeuclidean')
+    return path
 
-def create_video(query_embs, query_frames, key_embs, key_frames, video_path, use_dtw, interval=50, time_stride=1, image_out=False):
+
+def get_frame_pairs(query_embs, key_embs):
     """Create aligned videos."""
-    nns = align(query_embs, key_embs, use_dtw)
+    path = align_path(query_embs, key_embs)
+    _, uix = np.unique(path[0], return_index=True)
+    nns = path[1][uix]
+    
+    frame_pairs = []
+    
+    for i in np.arange(len(path[0])):
+        frame_pairs.append([int(path[0][i]), int(path[1][i])])
+        
+    return frame_pairs
+
+
+def create_video(query_embs, query_frames, key_embs, key_frames, video_path, interval=50, fps=30, time_stride=1):
+    """Create aligned videos."""
+    nns = align(query_embs, key_embs, True)
     if time_stride>1:
         query_frames = query_frames[::time_stride]
         nns = nns[::time_stride]
@@ -54,6 +72,9 @@ def create_video(query_embs, query_frames, key_embs, key_frames, video_path, use
 
     plt.figure(figsize=(5,1))
     nns_stride = np.floor(nns/time_stride)
+    # print("query_frames", len(query_frames))
+    # print("time_stride", time_stride)
+    # print("nns_stride", len(nns_stride))
     for t, t_nns in enumerate(nns_stride):
         plt.plot([t, t_nns], [1, 0], 'k--')
         plt.show()
@@ -64,8 +85,8 @@ def create_video(query_embs, query_frames, key_embs, key_frames, video_path, use
 
     def update(i):
         """Update plot with next frame."""
-        if i % 10 == 0:
-            logger.info(f'{i}/{len(query_frames)}')
+        # if i % 10 == 0:
+        #     logger.info(f'{i}/{len(query_frames)}')
         ax[0].imshow(unnorm(query_frames[i]))
         ax[1].imshow(unnorm(key_frames[nns[i]]))
         # Hide grid lines
@@ -79,29 +100,21 @@ def create_video(query_embs, query_frames, key_embs, key_frames, video_path, use
         ax[1].set_yticks([])
         plt.tight_layout()
     
-    if image_out:
-        image_folder = video_path.split('.mp4')[0]
-        os.makedirs(image_folder, exist_ok=True)
-        for i in np.arange(len(query_frames)):
-            update(i)
-            plt.savefig(os.path.join(image_folder, f"frame_{i}.png"))
-    else:
-        anim = FuncAnimation(
-            fig,
-            update,
-            frames=np.arange(len(query_frames)),
-            interval=interval,
-            blit=False)
-        anim.save(video_path, dpi=80)
+    anim = FuncAnimation(
+        fig,
+        update,
+        frames=np.arange(len(query_frames)),
+        interval=interval,
+        blit=False)
+    anim.save(video_path, dpi=80, fps=fps)
 
-
-def create_multiple_video(query_embs, query_frames, key_embs_list, key_frames_list, video_path, use_dtw, 
-                        interval=50):
+def create_multiple_video(query_embs, query_frames, key_embs_list, key_frames_list, video_path, 
+                        interval=50, fps=30):
     """Create aligned videos."""
     K = len(key_embs_list)
     nns_list = []
     for key_embs in key_embs_list:
-        nns = align(query_embs, key_embs, use_dtw)
+        nns = align(query_embs, key_embs)
         nns_list.append(nns)
 
     fig, ax = plt.subplots(nrows=2, ncols=3, figsize=(10, 10), tight_layout=True)
@@ -125,7 +138,7 @@ def create_multiple_video(query_embs, query_frames, key_embs_list, key_frames_li
         frames=np.arange(len(query_frames)),
         interval=interval,
         blit=False)
-    anim.save(video_path, dpi=80)
+    anim.save(video_path, dpi=80, fps=fps)
 
 
 def create_single_video(frames, labels, video_path, interval=50, time_stride=1, image_out=False):
@@ -137,8 +150,8 @@ def create_single_video(frames, labels, video_path, interval=50, time_stride=1, 
 
     def update(i):
         """Update plot with next frame."""
-        if i % 10 == 0:
-            print(f'{i}/{len(frames)}')
+        # if i % 10 == 0:
+        #     print(f'{i}/{len(frames)}')
         ax.imshow(unnorm(frames[i]))
         # Hide grid lines
         ax.grid(False)

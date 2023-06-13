@@ -44,7 +44,7 @@ class PennAction(torch.utils.data.Dataset):
         with open(os.path.join(cfg.PATH_TO_DATASET, fileName+'.pkl'), 'rb') as f:
             self.dataset, self.action_to_indices = pickle.load(f)
             
-        logger.info(f"{len(self.dataset)} {self.split} samples of {dataset_name} dataset have been read.")
+        # logger.info(f"{len(self.dataset)} {self.split} samples of {dataset_name} dataset have been read.")
 
         self.num_frames = cfg.TRAIN.NUM_FRAMES
         # Perform data-augmentation
@@ -57,7 +57,7 @@ class PennAction(torch.utils.data.Dataset):
 
         if 'tcn' in cfg.TRAINING_ALGO:
             self.num_frames = self.num_frames // 2
-
+            
     def __len__(self):
         return len(self.dataset)
 

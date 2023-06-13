@@ -2,6 +2,7 @@
 """Evaluate embeddings on downstream tasks."""
 
 import os
+import json
 import math
 import torch
 import pprint
@@ -15,7 +16,7 @@ from models import build_model, save_checkpoint, load_checkpoint
 from utils.optimizer import construct_optimizer
 from datasets import construct_dataloader
 from evaluation import get_tasks
-from visualize_alignment import create_video, create_single_video, create_multiple_video
+from visualize_alignment import create_video, get_frame_pairs, create_single_video, create_multiple_video
 from visualize_retrieval import create_retrieval_video
 
 logger = logging.get_logger(__name__)
@@ -73,7 +74,7 @@ def get_embeddings_dataset(cfg, model, data_loader):
                     'steps': steps_list,
                     'names': names_list}
 
-        logger.info(f"embeddings_dataset size: {len(dataset['embs'])}")
+        # logger.info(f"embeddings_dataset size: {len(dataset['embs'])}")
     return dataset
 
 def evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_emb_loader, 
@@ -87,7 +88,7 @@ def evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_em
             dataset = {'name': dataset_name}
             # logger.info(f"generating train embeddings for {dataset_name} dataset at {cur_epoch}.")
             # dataset['train_dataset'] = get_embeddings_dataset(cfg, model, train_emb_loader[i])
-            logger.info(f"generating val embeddings for {dataset_name} dataset at {cur_epoch}.")
+            # logger.info(f"generating val embeddings for {dataset_name} dataset at {cur_epoch}.")
             dataset['val_dataset'] = get_embeddings_dataset(cfg, model, val_emb_loader[i])
 
             for task_name, task in embedding_tasks.items():
@@ -96,7 +97,7 @@ def evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_em
                 metrics[task_name][dataset_name] = task.evaluate(dataset, cur_epoch, summary_writer)
             
             # if dataset_name == "pouring" or dataset_name == "baseball_pitch":
-            print("generating visualization for video alignment", len(dataset['val_dataset']['embs']))
+            # print("generating visualization for video alignment", len(dataset['val_dataset']['embs']))
             
             time_stride=10
             K = 5
@@ -123,9 +124,12 @@ def evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_em
             key_video, key_data = key_frames_list[0], key_data_list[0]
             # create_video(np.arange(len(query_video)).reshape(-1,1), query_video, np.arange(len(key_video)).reshape(-1,1), key_video, 
             #         os.path.join(cfg.LOGDIR, f'origin_{cur_epoch}.mp4'), use_dtw=False, interval=50, time_stride=time_stride, image_out=False)
-            create_video(query_data, query_video, key_data, key_video, 
-                    os.path.join(cfg.LOGDIR, f'alignment_{record_id}.mp4'), use_dtw=True, interval=50, time_stride=time_stride, image_out=False)
+            frame_pairs = get_frame_pairs(query_data, key_data)
             
+            create_video(query_data, query_video, key_data, key_video, 
+                    os.path.join(cfg.LOGDIR, f'alignment_{record_id}.mp4'), fps=5, time_stride=time_stride)
+            
+            # print("frame_pairs", len(frame_pairs))
             del dataset
 
     # Add all metrics in a separate tag so that analysis is easier.
@@ -136,11 +140,11 @@ def evaluate_once(cfg, model, train_loader, val_loader, train_emb_loader, val_em
                                 metrics[task_name][dataset], cur_epoch)
         avg_metric = sum(metrics[task_name].values())
         avg_metric /= len(cfg.DATASETS)
-        logger.info(f"metrics/all_{task_name}: {avg_metric:.3f}")
+        logger.info(f"Id: {record_id} metrics/all_{task_name}: {avg_metric:.3f}")
         summary_writer.add_scalar('metrics/all_%s' % task_name,
                         avg_metric, cur_epoch)
     
-
+    return f"{avg_metric:.3f}", frame_pairs
 
 def evaluate():
     """Evaluate embeddings."""
@@ -158,8 +162,8 @@ def evaluate():
     summary_writer = SummaryWriter(os.path.join(cfg.LOGDIR, 'eval_logs'))
 
     # Print config.
-    logger.info("Train with config:")
-    logger.info(pprint.pformat(cfg))
+    # logger.info("Train with config:")
+    # logger.info(pprint.pformat(cfg))
 
     # Build the video model
     model = build_model(cfg)
@@ -173,13 +177,36 @@ def evaluate():
 
     # Setup Dataset Iterators from train and val datasets.
     # train_loader, train_emb_loader = construct_dataloader(cfg, "train", "auto", "train.pkl")
+    metrics = load_metrics()
     
-    for i in range(99):
+    if ("results" not in metrics):
+        metrics["results"] = []
+        
+    for i in range(745, 752):
         val_loader, val_emb_loader = construct_dataloader(cfg, "val", "auto", "val_" + str(i))
         iterator_tasks, embedding_tasks = get_tasks(cfg)
-
-        evaluate_once(cfg, model, None, val_loader, None, val_emb_loader, 
+        
+        metric, frame_pairs = evaluate_once(cfg, model, None, val_loader, None, val_emb_loader, 
                             iterator_tasks, embedding_tasks, start_epoch, summary_writer, i)
+        metrics["results"].append({"metric": metric, "index": i, "frame_pairs": frame_pairs})
+        write_metrics(metrics)
+        
+    print(metrics["results"])
+    
+def load_metrics():
+    data_root = "/media/mislab_dataset/fit3D"
+    annotation_file = os.path.join(data_root, "annotation_info_fit_carl.json")
+    with open(annotation_file, 'r') as f:
+        data = json.load(f)
+    return data
+
+def write_metrics(data):
+    data_root = "/media/mislab_dataset/fit3D"
+    annotation_file = os.path.join(data_root, "annotation_info_fit_carl.json")
+    with open(annotation_file, 'w') as f:
+        json.dump(data, f, indent=2)
+    
+    
 
 if __name__ == '__main__':
     evaluate()

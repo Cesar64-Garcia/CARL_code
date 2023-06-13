@@ -69,8 +69,8 @@ class KendallsTau(object):
         taus = taus[~np.isnan(taus)]
         tau = np.mean(taus)
 
-        logger.info('epoch[{}/{}] {} set alignment tau: {:.4f}'.format(
-            cur_epoch, self.cfg.TRAIN.MAX_EPOCHS, split, tau))
+        # logger.info('epoch[{}/{}] {} set alignment tau: {:.4f}'.format(
+        #     cur_epoch, self.cfg.TRAIN.MAX_EPOCHS, split, tau))
 
         summary_writer.add_scalar(
             'kendalls_tau/%s_align_tau' % split, tau, cur_epoch)
