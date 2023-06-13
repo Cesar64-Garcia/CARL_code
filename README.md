@@ -159,7 +159,7 @@ Evaluation:
 python -m torch.distributed.launch --nproc_per_node 1 evaluate.py --workdir ~/datasets --cfg_file ./configs/scl_transformer_mislab_config.yml --logdir ~/tmp/scl_transformer_mislab_logs
 ```
 
-Evaluation:
+Metric Evaluation:
 
 ```
 python carl_evaluate.py
