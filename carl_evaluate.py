@@ -57,6 +57,8 @@ def main():
     
     aligned_data["metrics"] = {}
     aligned_data["metrics"]["mean_abs_time_difference"] = sum(all_time_abs_differences) / len(all_time_abs_differences)
+    aligned_data["metrics"]["std_abs_dev_time_difference"] = statistics.stdev(all_time_abs_differences)
+    aligned_data["metrics"]["max__abs_time_difference"] = max(all_time_abs_differences)
     aligned_data["metrics"]["mean_time_difference"] = sum(all_time_differences) / len(all_time_differences)
     aligned_data["metrics"]["max_time_difference"] = max(all_time_differences)
     aligned_data["metrics"]["min_time_difference"] = min(all_time_differences)
@@ -65,6 +67,8 @@ def main():
         
     print("overral")
     print("mean_abs_time_difference", aligned_data["metrics"]["mean_abs_time_difference"])
+    print("std_abs_dev_time_difference", aligned_data["metrics"]["std_abs_dev_time_difference"])
+    print("max__abs_time_difference", aligned_data["metrics"]["max__abs_time_difference"])
     print("mean_time_difference", aligned_data["metrics"]["mean_time_difference"])
     print("max_time_difference", aligned_data["metrics"]["max_time_difference"])
     print("min_time_difference", aligned_data["metrics"]["min_time_difference"])
